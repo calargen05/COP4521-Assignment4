@@ -17,17 +17,7 @@ def loadMsgs():
     with open(GOODBYEMSGFILE, "r") as f:
         goodbyeMsg = f.read()
                 
-n = len(sys.argv)
-if (n != 2):
-    print("Usage: server_port")
-    exit()
 
-loadMsgs()
-
-"""
-Send all data to sock, return 1 if successful
--1 if failed (socket error)
-"""
 def mySendAll(sock, data):
     total_sent = 0
     data_length = len(data)
@@ -93,20 +83,30 @@ def handleOneClient(sock):
         cmdCount = cmdCount + 1
         mySendAll(sock, f"<{userName}:{cmdCount}> ".encode())
 
-s = socket()
-h = gethostname()
-print(sys.argv[0], sys.argv[1])
+if __name__ == "__main__":
+    n = len(sys.argv)
+    if (n != 2):
+        print("Usage: server_port")
+        exit()
 
-s.bind((h, int(sys.argv[1])))
-s.listen(5)
-        
-while True:
-    sock, addr = s.accept()
-    print("Receive client connection from ", addr)
-    p = threading.Thread(target=handleOneClient, args=(sock,), daemon = True)
-    p.start()
+    loadMsgs()
+
+    """
+    Send all data to sock, return 1 if successful
+    -1 if failed (socket error)
+    """
+
+    s = socket()
+    h = gethostname()
+    print(sys.argv[0], sys.argv[1])
+
+    s.bind((h, int(sys.argv[1])))
+    s.listen(5)
+            
+    while True:
+        sock, addr = s.accept()
+        print("Receive client connection from ", addr)
+        p = threading.Thread(target=handleOneClient, args=(sock,), daemon = True)
+        p.start()
+
     
-
-
-
-
