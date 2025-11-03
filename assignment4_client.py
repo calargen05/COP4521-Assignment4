@@ -20,6 +20,7 @@ beforeLoginMsg = ''
 goodbyeMsg = ''
 
 online_users = {}
+blocked_users = {}
 user_info = {}
 rooms = {}
 next_room_id = 1
