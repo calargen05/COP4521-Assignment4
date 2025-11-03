@@ -233,6 +233,116 @@ def processCmd(userName, sock, cmd):
                 mySendAll(sock, f"Message sent to {target_user}.\n".encode())
             else:
                 mySendAll(sock, f"Error: Could not send message to {target_user} (socket error).\n".encode())
+        elif command == "info":
+            if len(parts) < 2:
+                with global_lock:
+                    status_msg = user_info.get(userName, f"Hello, I am {userName}!")
+                    response = f"Your current info: {status_msg}\n"
+                mySendAll(sock, response.encode())
+            else:
+                new_info = " ".join(parts[1:])
+                with global_lock:
+                    user_info[userName] = new_info
+                mySendAll(sock, f"Your info has been updated to: '{new_info}'\n".encode())
+        elif command == "block":
+            if len(parts) < 2:
+                mySendAll(sock , "Error: Usage: block <user>\n".encode())
+                return
+
+            target_user = parts[1]
+            with global_lock:
+                if target_user == userName:
+                    mySendAll(sock, "You cannot block yourself.\n".encode())
+                    return
+                if target_user not in user_info:
+                    mySendAll(sock, f"Error: User '{target_user}' does not exist.\n".encode())
+                    return
+                
+                # add target_user to the current user's block set
+                blocked_users.setdefault(userName, set()).add(target_user)
+                mySendAll(sock, f"user '{target_user}' has been blocked. You will not receive their shouts or tells.\n".encode())
+        elif command == "unblock":
+            if len(parts) < 2:
+                mySendAll(sock, "Error: Usage: unblock <user>\n".encode())
+                return
+            target_user = parts[1]
+            with global_lock:
+                if userName in blocked_users and target_user in blocked_users[userName]:
+                    blocked_users[userName].remove(target_user)
+                    mySendAll(sock, f"User '{target_user}' is now unblocked.\n".encode())
+                else:
+                    mySendAll(sock, f"Error: User '{target_user}' was not in your blocked list.\n".encode())
+        elif command == "say":
+            if len(parts) < 2:
+                mySendAll(sock, "Error: Usage: say <message>\n".encode())
+                return
+            
+            message = " ".join(parts[1:])
+
+            user_room_id = None
+            room_members = []
+            room_topic = ""
+
+            with global_lock:
+                # Find the first room the user is a member of
+                for r_id, r_data in rooms.items():
+                    if userName in r_data['members']:
+                        user_room_id = r_id
+                        room_topic = r_data['topic']
+                        room_members = list(r_data['members'])
+                        break
+                if user_room_id is None:
+                    mySendAll(sock, "Error: You are not in any room. Join a room to use 'say'.\n".encode())
+                    return
+                room_msg = f"\n[Room {user_room_id} - {room_topic}] <{userName}>: {message}\n"
+
+                # send to all members in the room except the sender
+                for member in room_members:
+                    if member == userName:
+                        continue
+
+                    # Check if recipient (member) has blocked the sender (userName)
+                    if userName in blocked_users.get(member, set()):
+                        continue
+                    
+                    # check if member is online
+                    member_sock = online_users.get(member)
+                    if member_sock:
+                        if mySendAll(member_sock, room_msg.encode()) == -1:
+                            print(f"Failed to send room message to {member} (socket error).")
+            mySendAll(sock, f"Message sent to room {user_room_id}.\n".encode())
+        elif command == "help":
+            help_message = (
+                "\n--- Available Commands ---\n"
+                "who                    : List all online users.\n"
+                "status [<user>]        : Show your status or another user's status.\n"
+                "info <text>            : Set your personal status/info text.\n"
+                "register <user>        : Pre-register a username (for non-existent users).\n"
+                "shout <message>        : Send a message to all online users.\n"
+                "tell <user> <message>  : Send a private message to a user.\n"
+                "block <user>           : Block messages from a specific user.\n"
+                "unblock <user>         : Unblock a user.\n"
+                "start <topic>          : Create a new chat room.\n"
+                "rooms                  : List all active chat rooms.\n"
+                "join <room_id>         : Join a chat room.\n"
+                "leave <room_id>        : Leave a chat room.\n"
+                "say <message>          : Send a message to all users in your current room.\n"
+                "help                   : Show this help message.\n"
+                "quit / exit            : Log out and disconnect.\n"
+            )
+            mySendAll(sock, help_message.encode())
+        elif command == "register":
+            if len(parts) < 2:
+                mySendAll(sock, "Error: Usage: regiester <new_username>\n".encode())
+                return
+
+            new_user = parts[1]
+            with global_lock:
+                if new_user in user_info:
+                    mySendAll(sock, f"Error: User '{new_user}' already exists.\n".encode())
+                else:
+                    user_info[new_user] = f"Hello, I am {new_user}!"
+                    mySendAll(sock, f"User '{new_user}' has been registered.\n".encode())
 
         else:
             mySendAll(sock, f"Error: Unknown command '{command}'.\n".encode())
