@@ -98,36 +98,38 @@ try:
         s.close()
         exit()
 
-    # --- CORRECTED MAIN LOOP ---
+# --- CORRECTED MAIN LOOP ---
     
+    # We already received the welcome messages,
+    # now we must receive the *first* prompt (e.g., "<user:0> ")
+    prompt_and_response = s.recv(1000)
+    if not prompt_and_response:
+        print("Server closed connection.")
+        exit()
+
     while True:
-        # 1. Receive the command prompt
-        promptMsg = s.recv(1000)
-        if not promptMsg:
-            print("\nServer connection lost.")
-            break
-        
-        # 2. Get command from user and send it
-        cmd = input(promptMsg.decode())
-        if not cmd: # Handle empty input
+        # 1. Print the combined message (response + prompt) and get user input
+        cmd = input(prompt_and_response.decode())
+        if not cmd:
             cmd = " " # Send something to avoid server loop
             
+        # 2. Send the command
         s.send((cmd + '\n').encode())
 
         # 3. Handle quit/exit
         if cmd.lower() == "exit" or cmd.lower() == "quit":
-            goodByeMsg = s.recv(1000)
+            goodByeMsg = s.recv(1000) # Get the goodbye message
             print(goodByeMsg.decode())
             s.close()
             break
             
-        # 4. ***THIS IS THE MISSING STEP***
-        # Receive the command's *response* from the server
-        response = s.recv(1000)
-        if not response:
+        # 4. Receive the *next* combined (response + prompt)
+        prompt_and_response = s.recv(1000)
+        if not prompt_and_response:
             print("\nServer connection lost.")
             break
-        print(response.decode(), end='') # Print the response
+        
+        # The loop will now repeat and print this message in step 1
 
 except (socket.error, BrokenPipeError, ConnectionResetError):
     print("Connection to server failed.")

@@ -224,7 +224,7 @@ def processCmd(userName, sock, cmd, next_CmdCount):
                     response += (f"[{r_id}] {r_data['topic']} "
                                  f"(Leader: {r_data['leader']}, "
                                  f"Members: {len(r_data['members'])})\n")
-                mySendAll(sock, response.encode())
+                mySendAll(sock, (response + next_prompt).encode())
 
         elif command == "join":
             if len(parts) < 2:
