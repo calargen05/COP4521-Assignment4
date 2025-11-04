@@ -161,12 +161,14 @@ def handle_logout(userName):
                 
     print(f"User {userName} logged out and cleaned up.")
 
-def processCmd(userName, sock, cmd):
+def processCmd(userName, sock, cmd, next_CmdCount):
     global next_room_id
     print(f"process '{cmd}' from {userName}")
     
     parts = cmd.split()
     command = parts[0].lower() if parts else ""
+
+    next_prompt = f"<{userName}:{next_CmdCount}> "
 
     try:
         if command == "who":
@@ -177,7 +179,7 @@ def processCmd(userName, sock, cmd):
                 else:
                     for user in online_users.keys():
                         response += f"* {user}\n"
-            mySendAll(sock, response.encode())
+            mySendAll(sock, (response + next_prompt).encode())
 
         elif command == "status":
             target_user = userName
@@ -186,17 +188,17 @@ def processCmd(userName, sock, cmd):
             
             with global_lock:
                 if target_user not in user_info:
-                    mySendAll(sock, f"Error: User '{target_user}' does not exist.\n".encode())
+                    mySendAll(sock, (f"Error: User '{target_user}' does not exist.\n" + next_prompt).encode())
                 else:
                     status_msg = user_info[target_user]
                     online_status = "Online" if target_user in online_users else "Offline"
                     response = f"--- Status for {target_user} ({online_status}) ---\n"
                     response += f"{status_msg}\n"
-                    mySendAll(sock, response.encode())
+                    mySendAll(sock, (response + next_prompt).encode())
 
         elif command == "start":
             if len(parts) < 2:
-                mySendAll(sock, "Error: Usage: start <topic>\n".encode())
+                mySendAll(sock, (f"Error: Usage: start <topic>\n" + next_prompt).encode())
                 return
             
             topic = " ".join(parts[1:])
@@ -209,12 +211,12 @@ def processCmd(userName, sock, cmd):
                     'leader': userName,
                     'members': {userName}
                 }
-                mySendAll(sock, f"Room {room_id} created for topic: {topic}\n".encode())
+                mySendAll(sock, (f"Room {room_id} created for topic: {topic}\n" + next_prompt).encode())
         
         elif command == "rooms":
             with global_lock:
                 if not rooms:
-                    mySendAll(sock, "There are no active rooms.\n".encode())
+                    mySendAll(sock, (f"There are no active rooms.\n" + next_prompt).encode())
                     return
                 
                 response = "--- Active Rooms ---\n"
@@ -226,50 +228,50 @@ def processCmd(userName, sock, cmd):
 
         elif command == "join":
             if len(parts) < 2:
-                mySendAll(sock, "Error: Usage: join <room number>\n".encode())
+                mySendAll(sock, (f"Error: Usage: join <room number>\n" + next_prompt).encode())
                 return
             
             try:
                 room_id = int(parts[1])
             except ValueError:
-                mySendAll(sock, "Error: Room number must be an integer.\n".encode())
+                mySendAll(sock, (f"Error: Room number must be an integer.\n" + next_prompt).encode())
                 return
 
             with global_lock:
                 if room_id not in rooms:
-                    mySendAll(sock, "Error: Room does not exist.\n".encode())
+                    mySendAll(sock, (f"Error: Room does not exist.\n" + next_prompt).encode())
                 else:
                     rooms[room_id]['members'].add(userName)
-                    mySendAll(sock, f"You have joined room {room_id} ('{rooms[room_id]['topic']}').\n".encode())
+                    mySendAll(sock, (f"You have joined room {room_id} ('{rooms[room_id]['topic']}').\n" + next_prompt).encode())
 
         elif command == "leave":
             if len(parts) < 2:
-                mySendAll(sock, "Error: Usage: leave <room number>\n".encode())
+                mySendAll(sock, (f"Error: Usage: leave <room number>\n" + next_prompt).encode())
                 return
 
             try:
                 room_id = int(parts[1])
             except ValueError:
-                mySendAll(sock, "Error: Room number must be an integer.\n".encode())
+                mySendAll(sock, (f"Error: Room number must be an integer.\n" + next_prompt).encode())
                 return
                 
             with global_lock:
                 if room_id not in rooms:
-                    mySendAll(sock, "Error: Room does not exist.\n".encode())
+                    mySendAll(sock, (f"Error: Room does not exist.\n" + next_prompt).encode())
                 elif userName not in rooms[room_id]['members']:
-                    mySendAll(sock, f"Error: You are not in room {room_id}.\n".encode())
+                    mySendAll(sock, (f"Error: You are not in room {room_id}.\n" + next_prompt).encode())
                 else:
                     rooms[room_id]['members'].remove(userName)
-                    mySendAll(sock, f"You have left room {room_id}.\n".encode())
-                    
+                    mySendAll(sock, (f"You have left room {room_id}.\n" + next_prompt).encode())
+
                     if rooms[room_id]['leader'] == userName:
                         topic = rooms[room_id]['topic']
                         del rooms[room_id]
-                        mySendAll(sock, f"As you were the leader, room {room_id} ('{topic}') has been closed.\n".encode())
+                        mySendAll(sock, (f"As you were the leader, room {room_id} ('{topic}') has been closed.\n" + next_prompt).encode())
 
         elif command == "shout":
             if len(parts) < 2:
-                mySendAll(sock, "Error: Usage: shout <message>\n".encode())
+                mySendAll(sock, (f"Error: Usage: shout <message>\n" + next_prompt).encode())
                 return
                 
             message = " ".join(parts[1:])
@@ -288,11 +290,11 @@ def processCmd(userName, sock, cmd):
                 if mySendAll(user_sock, broadcast_msg.encode()) == -1:
                     print(f"Failed to shout to {user} (socket error).")
 
-            mySendAll(sock, "Message shouted to all online users.\n".encode())
+            mySendAll(sock, (f"Message shouted to all online users.\n" + next_prompt).encode())
         
         elif command == "tell":
             if len(parts) < 3:
-                mySendAll(sock, "Error: Usage: tell <user> <message>\n".encode())
+                mySendAll(sock, (f"Error: Usage: tell <user> <message>\n" + next_prompt).encode())
                 return
             
             target_user = parts[1]
@@ -301,67 +303,67 @@ def processCmd(userName, sock, cmd):
             
             with global_lock:
                 if target_user not in online_users:
-                    mySendAll(sock, "Error: User is not online.\n".encode())
+                    mySendAll(sock, (f"Error: User is not online.\n" + next_prompt).encode())
                     return
                 if target_user == userName:
-                    mySendAll(sock, "You can't tell a message to yourself.\n".encode())
+                    mySendAll(sock, (f"You can't tell a message to yourself.\n" + next_prompt).encode())
                     return
                 if userName in blocked_users.get(target_user, set()):
-                    mySendAll(sock, f"Error: Your messages are blocked by {target_user}.\n".encode())
+                    mySendAll(sock, (f"Error: Your messages are blocked by {target_user}.\n" + next_prompt).encode())
                     return
                 
                 target_sock = online_users[target_user]
 
             private_msg = f"\n<{userName} tells you>: {message}\n"
             if mySendAll(target_sock, private_msg.encode()) != -1:
-                mySendAll(sock, f"Message sent to {target_user}.\n".encode())
+                mySendAll(sock, (f"Message sent to {target_user}.\n" + next_prompt).encode())
             else:
-                mySendAll(sock, f"Error: Could not send message to {target_user} (socket error).\n".encode())
+                mySendAll(sock, (f"Error: Could not send message to {target_user} (socket error).\n" + next_prompt).encode())
         elif command == "info":
             if len(parts) < 2:
                 with global_lock:
                     status_msg = user_info.get(userName, f"Hello, I am {userName}!")
                     response = f"Your current info: {status_msg}\n"
-                mySendAll(sock, response.encode())
+                mySendAll(sock, (response.encode() + next_prompt.encode()))
             else:
                 new_info = " ".join(parts[1:])
                 with global_lock:
                     user_info[userName] = new_info
                     save_user_info()
-                mySendAll(sock, f"Your info has been updated to: '{new_info}'\n".encode())
+                mySendAll(sock, (f"Your info has been updated to: '{new_info}'\n" + next_prompt).encode())
         elif command == "block":
             if len(parts) < 2:
-                mySendAll(sock , "Error: Usage: block <user>\n".encode())
+                mySendAll(sock , (f"Error: Usage: block <user>\n" + next_prompt).encode())
                 return
 
             target_user = parts[1]
             with global_lock:
                 if target_user == userName:
-                    mySendAll(sock, "You cannot block yourself.\n".encode())
+                    mySendAll(sock, (f"You cannot block yourself.\n" + next_prompt).encode())
                     return
                 if target_user not in user_info:
-                    mySendAll(sock, f"Error: User '{target_user}' does not exist.\n".encode())
+                    mySendAll(sock, (f"Error: User '{target_user}' does not exist.\n" + next_prompt).encode())
                     return
                 
                 # add target_user to the current user's block set
                 blocked_users.setdefault(userName, set()).add(target_user)
                 save_blocked_users()
-                mySendAll(sock, f"user '{target_user}' has been blocked. You will not receive their shouts or tells.\n".encode())
+                mySendAll(sock, (f"User '{target_user}' has been blocked. You will not receive their shouts or tells.\n" + next_prompt).encode())
         elif command == "unblock":
             if len(parts) < 2:
-                mySendAll(sock, "Error: Usage: unblock <user>\n".encode())
+                mySendAll(sock, (f"Error: Usage: unblock <user>\n" + next_prompt).encode())
                 return
             target_user = parts[1]
             with global_lock:
                 if userName in blocked_users and target_user in blocked_users[userName]:
                     blocked_users[userName].remove(target_user)
                     save_blocked_users()
-                    mySendAll(sock, f"User '{target_user}' is now unblocked.\n".encode())
+                    mySendAll(sock, (f"User '{target_user}' is now unblocked.\n" + next_prompt).encode())
                 else:
-                    mySendAll(sock, f"Error: User '{target_user}' was not in your blocked list.\n".encode())
+                    mySendAll(sock, (f"Error: User '{target_user}' was not in your blocked list.\n" + next_prompt).encode())
         elif command == "say":
             if len(parts) < 2:
-                mySendAll(sock, "Error: Usage: say <message>\n".encode())
+                mySendAll(sock, (f"Error: Usage: say <message>\n" + next_prompt).encode())
                 return
             
             message = " ".join(parts[1:])
@@ -390,9 +392,9 @@ def processCmd(userName, sock, cmd):
                                     print(f"Failed to send room message to {member} (socket error).")
             
             if rooms_spoken_in == 0:
-                mySendAll(sock, "Error: You are not in any room. Join a room to use 'say'.\n".encode())
+                mySendAll(sock, (f"Error: You are not in any room. Join a room to use 'say'.\n" + next_prompt).encode())
             else:
-                mySendAll(sock, f"Message sent to {rooms_spoken_in} room(s).\n".encode())
+                mySendAll(sock, (f"Message sent to {rooms_spoken_in} room(s).\n" + next_prompt).encode())
         elif command == "help":
             help_message = (
                 "\n--- Available Commands ---\n"
@@ -412,24 +414,24 @@ def processCmd(userName, sock, cmd):
                 "help                   : Show this help message.\n"
                 "quit / exit            : Log out and disconnect.\n"
             )
-            mySendAll(sock, help_message.encode())
+            mySendAll(sock, (help_message + next_prompt).encode())
         elif command == "register":
             if len(parts) < 3:
-                mySendAll(sock, "Error: Usage: register <new_username> <password>\n".encode())
+                mySendAll(sock, (f"Error: Usage: register <new_username> <password>\n" + next_prompt).encode())
                 return
 
             new_user = parts[1]
             password = parts[2]
 
             if len(password) < 4:
-                mySendAll(sock, "Error: Password must be at least 4 characters long.\n".encode())
+                mySendAll(sock, (f"Error: Password must be at least 4 characters long.\n" + next_prompt).encode())
                 return
             
             hashed_password = hashlib.sha256(password.encode()).hexdigest()
 
             with global_lock:
                 if new_user in user_accounts:
-                    mySendAll(sock, f"Error: User '{new_user}' already exists.\n".encode())
+                    mySendAll(sock, (f"Error: User '{new_user}' already exists.\n" + next_prompt).encode())
                 else:
                     user_accounts[new_user] = hashed_password
                     user_info[new_user] = f"Hello, I am {new_user}!"
@@ -437,15 +439,15 @@ def processCmd(userName, sock, cmd):
                     save_accounts()
                     save_user_info()
 
-                    mySendAll(sock, f"User '{new_user}' has been registered.\n".encode())
+                    mySendAll(sock, (f"User '{new_user}' has been registered.\n" + next_prompt).encode())
 
         else:
-            mySendAll(sock, f"Error: Unknown command '{command}'.\n".encode())
-    
+            mySendAll(sock, (f"Error: Unknown command '{command}'.\n" + next_prompt).encode())
+
     except Exception as e:
         print(f"!!! EXCEPTION in processCmd from {userName}: {e}")
         try:
-            mySendAll(sock, "An internal server error occurred while processing your command.\n".encode())
+            mySendAll(sock, (f"An internal server error occurred while processing your command.\n" + next_prompt).encode())
         except:
             pass
 
@@ -528,10 +530,9 @@ def handleOneClient(sock):
             sock.close()
             break
         else: 
-            processCmd(userName, sock, cmd)
+            processCmd(userName, sock, cmd, cmdCount + 1)
 
         cmdCount = cmdCount + 1
-        mySendAll(sock, f"<{userName}:{cmdCount}> ".encode())
 
 s = socket()
 h = gethostname()

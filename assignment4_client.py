@@ -1,6 +1,6 @@
 """
 Name: Kesnel Mezinord & Colin Largen
-Date: 11/04/25
+Date: 10/24/25
 Assignment: Assignment #4
 Due Date: 11/04/25
 About this project: A simple telnet-style client to connect to the 
