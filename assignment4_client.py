@@ -37,7 +37,7 @@ try:
     if not beginningMsg:
         print("Server closed connection.")
         exit()
-    print(beginningMsg.decode(), end='') # Use end='' to avoid extra newlines
+    print(beginningMsg.decode(), end='', flush=True) # Use end='' to avoid extra newlines
 
     # 2. Receive Username Prompt, Send Username
     userPrompt = s.recv(1000)
@@ -55,7 +55,7 @@ try:
         exit()
     
     response1_decoded = response1.decode()
-    print(response1_decoded, end='')
+    print(response1_decoded, end='', flush=True)
 
     # Path A: Registered User - Server asks for password
     if "Enter your password:" in response1_decoded:
@@ -69,7 +69,7 @@ try:
             exit()
         
         response2_decoded = response2.decode()
-        print(response2_decoded, end='')
+        print(response2_decoded, end='', flush=True)
 
         # Check for login failure
         if "Incorrect password" in response2_decoded:
@@ -84,14 +84,14 @@ try:
         if not response2:
             print("Server closed connection.")
             exit()
-        print(response2.decode(), end='')
+        print(response2.decode(), end='', flush=True)
 
         # Server sends "Welcome..."
         response3 = s.recv(1000)
         if not response3:
             print("Server closed connection.")
             exit()
-        print(response3.decode(), end='')
+        print(response3.decode(), end='', flush=True)
         
     # Path C: Already logged in error
     elif "User is already logged in" in response1_decoded:
