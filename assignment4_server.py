@@ -134,12 +134,17 @@ def mySendAll(sock, data):
         while total_sent < data_length:
             sent = sock.send(data[total_sent:])
             if sent == 0:
-                return -1
+                # Raise an error instead of returning -1
+                raise ConnectionError("Socket connection broken, sent 0 bytes")
             total_sent += sent
 
-    except Exception :
-        return -1
-
+    except Exception as e:
+        # Re-raise the exception to be caught by the thread's main loop
+        # This ensures the thread will crash and clean up properly
+        print(f"mySendAll failed: {e}")
+        raise e
+    
+    # Return 1 on success (though we aren't checking it, it's good practice)
     return 1
 
 def handle_logout(userName):
@@ -454,85 +459,108 @@ def processCmd(userName, sock, cmd, next_CmdCount):
 
 def handleOneClient(sock):
 
-    mySendAll(sock, beforeLoginMsg.encode())
-    mySendAll(sock, "Enter your username: ".encode())
+    # We need userName for the final except block, so define it early
+    userName = ""
 
-    data1 = sock.recv(1000)
-    if (len(data1) == 0) :
-        sock.close()
-        return
-    
-    data2 = data1.decode().split(' ')[0]
-    userName = data2.replace("\t", " ").replace("\n", "").replace("\r", "")
+    try:
+        mySendAll(sock, beforeLoginMsg.encode())
+        mySendAll(sock, "Enter your username: ".encode())
 
-    user_exists = False
-    with global_lock:
-        user_exists = userName in user_accounts
-
-    if user_exists:
-        # User exists, prompt for password
-        mySendAll(sock, "Enter your password: ".encode())
-        pass_data = sock.recv(1000)
-        if len(pass_data) == 0:
+        data1 = sock.recv(1000)
+        if (len(data1) == 0) :
             sock.close()
             return
         
-        password = pass_data.decode().replace("\t", " ").replace("\n", "").replace("\r", "")
+        data2 = data1.decode().split(' ')[0]
+        # Assign to the outer userName variable
+        userName = data2.replace("\t", " ").replace("\n", "").replace("\r", "")
 
-        # Hash the incoming password to compare it with the stored hash
-        hashed_password = hashlib.sha256(password.encode()).hexdigest()
-
+        user_exists = False
         with global_lock:
-            if user_accounts.get(userName) != hashed_password:
-                mySendAll(sock, "Error: Incorrect password. Connection closing.\n".encode())
+            user_exists = userName in user_accounts
+
+        if user_exists:
+            # User exists, prompt for password
+            mySendAll(sock, "Enter your password: ".encode())
+            pass_data = sock.recv(1000)
+            if len(pass_data) == 0:
                 sock.close()
                 return
-    else:
-        # New user, log them in as a guest
-        mySendAll(sock, f"User '{userName}' not found. Logging in as a guest.\n".encode())
-        mySendAll(sock, "Use 'register <user> <pass>' to create a permanent account.\n".encode())
-    
-    with global_lock:
-        if userName in online_users:
-            mySendAll(sock, "Error: User is already logged in.\n".encode())
-            sock.close()
-            return
-        
-        online_users[userName] = sock
-        
-        user_info.setdefault(userName, f"Hello, I am {userName}!")
-    
-    str = f"Welcome to the Internet Chat Room, {userName}!\n\n"
-    mySendAll(sock, str.encode())
-
-    cmdCount = 0
-    mySendAll(sock, f"<{userName}:{cmdCount}> ".encode())
-    
-    while True:
-        data = sock.recv(1000)
-        if (len(data) == 0):
-            print(f"Client {userName} closed connection")
-            handle_logout(userName)
-            sock.close()
-            break
-
-        cmd = data.decode().replace("\t", "").replace("\n", "").replace("\r", "")
-        
-        if not cmd:
-            mySendAll(sock, f"<{userName}:{cmdCount}> ".encode())
-            continue
             
-        tmp = cmd.split()
-        command = cmd.split()[0].lower()
-        if (command == 'quit' or command == 'exit'):
-            mySendAll(sock, goodbyeMsg.encode())
-            handle_logout(userName)
-            sock.close()
-            break
-        else: 
-            processCmd(userName, sock, cmd, cmdCount + 1)
+            password = pass_data.decode().replace("\t", " ").replace("\n", "").replace("\r", "")
 
-        cmdCount = cmdCount + 1
+            # Hash the incoming password to compare it with the stored hash
+            hashed_password = hashlib.sha256(password.encode()).hexdigest()
+
+            with global_lock:
+                if user_accounts.get(userName) != hashed_password:
+                    mySendAll(sock, "Error: Incorrect password. Connection closing.\n".encode())
+                    sock.close()
+                    return
+        else:
+            # New user, log them in as a guest
+            mySendAll(sock, f"User '{userName}' not found. Logging in as a guest.\n".encode())
+            mySendAll(sock, "Use 'register <user> <pass>' to create a permanent account.\n".encode())
+        
+        with global_lock:
+            if userName in online_users:
+                mySendAll(sock, "Error: User is already logged in.\n".encode())
+                sock.close()
+                return
+            
+            online_users[userName] = sock
+            
+            user_info.setdefault(userName, f"Hello, I am {userName}!")
+        
+        str_msg = f"Welcome to the Internet Chat Room, {userName}!\n\n"
+        mySendAll(sock, str_msg.encode())
+
+        cmdCount = 0
+        mySendAll(sock, f"<{userName}:{cmdCount}> ".encode())
+        
+        while True:
+            data = sock.recv(1000)
+            if (len(data) == 0):
+                # This is a clean disconnect by the client
+                print(f"Client {userName} closed connection")
+                handle_logout(userName)
+                sock.close()
+                break
+
+            cmd = data.decode().replace("\t", "").replace("\n", "").replace("\r", "")
+            
+            if not cmd:
+                mySendAll(sock, f"<{userName}:{cmdCount}> ".encode())
+                continue
+                
+            tmp = cmd.split()
+            command = cmd.split()[0].lower()
+            if (command == 'quit' or command == 'exit'):
+                mySendAll(sock, goodbyeMsg.encode())
+                handle_logout(userName)
+                sock.close()
+                break
+            else: 
+                processCmd(userName, sock, cmd, cmdCount + 1)
+
+            cmdCount = cmdCount + 1
+
+    except (socket.error, ConnectionError, BrokenPipeError, ConnectionResetError) as e:
+        # This will catch:
+        # 1. Any failed mySendAll()
+        # 2. Any failed sock.recv()
+        # 3. Client force-quitting (e.g., Ctrl-C on client)
+        print(f"Connection lost to {userName} (Address: {sock.getpeername()}). Error: {e}")
+        # Clean up the user, even if they didn't log out gracefully
+        if userName: # Only try to log out if they got past the username prompt
+            handle_logout(userName)
+        sock.close()
+    except Exception as e:
+        # Catch any other unexpected bugs
+        print(f"!!! CRITICAL UNHANDLED ERROR in thread for {userName}: {e}")
+        if userName:
+            handle_logout(userName)
+        sock.close()
 
 s = socket()
 h = gethostname()
