@@ -292,8 +292,14 @@ def processCmd(userName, sock, cmd, next_CmdCount):
                     if userName in blocked_users.get(user, set()):
                         continue
 
-                if mySendAll(user_sock, broadcast_msg.encode()) == -1:
-                    print(f"Failed to shout to {user} (socket error).")
+                # --- ADD THIS TRY/EXCEPT BLOCK ---
+                try:
+                    # Remove the 'if ... == -1' check
+                    mySendAll(user_sock, broadcast_msg.encode())
+                except Exception as e:
+                    # This user is probably disconnected, just print and continue
+                    print(f"Failed to shout to {user} (socket error: {e}).")
+                # --- END FIX ---
 
             mySendAll(sock, (f"Message shouted to all online users.\n" + next_prompt).encode())
         
@@ -320,10 +326,16 @@ def processCmd(userName, sock, cmd, next_CmdCount):
                 target_sock = online_users[target_user]
 
             private_msg = f"\n<{userName} tells you>: {message}\n"
-            if mySendAll(target_sock, private_msg.encode()) != -1:
+            # --- ADD THIS TRY/EXCEPT BLOCK ---
+            try:
+                # Remove the 'if ... != -1' check
+                mySendAll(target_sock, private_msg.encode())
                 mySendAll(sock, (f"Message sent to {target_user}.\n" + next_prompt).encode())
-            else:
+            except Exception as e:
+                print(f"Failed to tell {target_user} (socket error: {e}).")
                 mySendAll(sock, (f"Error: Could not send message to {target_user} (socket error).\n" + next_prompt).encode())
+            # --- END FIX ---
+
         elif command == "info":
             if len(parts) < 2:
                 with global_lock:
@@ -393,8 +405,13 @@ def processCmd(userName, sock, cmd, next_CmdCount):
                             
                             member_sock = online_users.get(member)
                             if member_sock:
-                                if mySendAll(member_sock, room_msg.encode()) == -1:
-                                    print(f"Failed to send room message to {member} (socket error).")
+                                # --- ADD THIS TRY/EXCEPT BLOCK ---
+                                try:
+                                    # Remove the 'if ... == -1' check
+                                    mySendAll(member_sock, room_msg.encode())
+                                except Exception as e:
+                                    print(f"Failed to send room message to {member} (socket error: {e}).")
+                                # --- END FIX ---
             
             if rooms_spoken_in == 0:
                 mySendAll(sock, (f"Error: You are not in any room. Join a room to use 'say'.\n" + next_prompt).encode())
